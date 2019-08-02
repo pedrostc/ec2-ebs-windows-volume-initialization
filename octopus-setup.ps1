@@ -1,55 +1,9 @@
-<powershell>
-$workingDir = "C:\Initialization"
-
-New-Item -Path $workingDir -ItemType Directory |
-    Set-Location
-
-Start-Transcript -Path ".\initialization-transcript.log"
-
-
-Write-Host "Step 1: Initializing EBS volumes."
-Write-Host "Listing attached volumes."
-$id = Invoke-RestMethod -uri http://169.254.169.254/latest/meta-data/instance-id -UseBasicParsing
-$volumes = (Get-EC2Instance -InstanceId $id).Instances.BlockDeviceMappings |
-    Where-Object DeviceName -Like xvd*
-
-foreach ($volume in $volumes){
-    $volId = $volume.Ebs.VolumeId
-
-    Write-Host "Initializing Volume '$volId' on mount point '$($volume.DeviceName)'."
-
-    $diskSelector = "$($volId.Replace('vol-', 'vol'))*"
-    $disk = Get-Disk |
-       Where {($_.SerialNumber -like $diskSelector)}
-
-    if (!$disk) { 
-        Write-Host "Could not find disk."
-        Continue
-    }
-    if ($disk.PartitionStyle -ne "raw") { 
-        Write-Host "Disk found but already initialized."
-        Continue
-    }
-
-    Write-Host "Initializing disk"
-
-    $disk | Initialize-Disk -PartitionStyle MBR -PassThru |
-        New-Partition -AssignDriveLetter -UseMaximumSize |
-        Format-Volume -FileSystem NTFS -Confirm:$false
-
-    Write-Host "Disk initialized"
-}
-
-Write-Host "Volumes initialization completed."
-
-Write-Host "Step 2: Installing Octopus Server."
-
 # TODO: Unsafe, look for a better way of passing credentials
 $connectionString = "Server=${var.db_server};Database=Octopus;User Name=${var.db_user};Password=${var.db_password};"
 
-$octopusPassword = (Get-SSMParameter /octopus/admin/pwd -WithDecryption $true).Value
-$octopusUserName = (Get-SSMParameter /octopus/admin/user -WithDecryption $true).Value
-$octopusAdminEmail = (Get-SSMParameter /octopus/admin/email -WithDecryption $true).Value
+# TODO: Pass the password encrypted and secure. Also find a better way to inject the credentials
+$octopusPassword = ConvertTo-SecureString "ImAPassword" -AsPlainText -Force
+$octopusCreds = New-Object System.Management.Automation.PSCredential ("octopus", $octopusPassword)
 
 $installerUrl = "https://octopus.com/downloads/slowlane/WindowsX64/OctopusServer"
 $outputFile = "octopus.msi"
@@ -75,9 +29,6 @@ Invoke-Expression "$octopusServerExe create-instance --instance $octopusInstance
 Invoke-Expression "$octopusServerExe database --instance $octopusInstanceName --connectionString '$connectionString2' --create"
 Invoke-Expression "$octopusServerExe configure --instance $octopusInstanceName --upgradeCheck True --upgradeCheckWithStatistics True --usernamePasswordIsEnabled True --webForceSSL False --commsListenPort 10943 --serverNodeName localhost"
 Invoke-Expression "$octopusServerExe service --instance $octopusInstanceName --stop"
-Invoke-Expression "$octopusServerExe admin --instance $octopusInstanceName --username $octopusUserName --email $octopusAdminEmail --password $octopusPassword"
+Invoke-Expression "$octopusServerExe admin --instance $octopusInstanceName --username octopus --email pcorrea@rlsolutions.com --password R@dicalogic1"
 # Invoke-Expression "$octopusServerExe license --instance $octopusInstanceName --licenseBase64 <a very long license string>"
 Invoke-Expression "$octopusServerExe service --instance $octopusInstanceName --install --reconfigure --start"
-
-Stop-Transcript
-</powershell>

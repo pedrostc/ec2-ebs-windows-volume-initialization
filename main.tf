@@ -49,9 +49,10 @@ resource "aws_ebs_volume" "octopus_data" {
 }
 
 resource "aws_volume_attachment" "octopus_data_attachment" {
-  device_name = "xvdb"
-  volume_id   = "${aws_ebs_volume.octopus_data.id}"
-  instance_id = "${aws_instance.octopus_server.id}"
+  device_name  = "xvdb"
+  volume_id    = "${aws_ebs_volume.octopus_data.id}"
+  instance_id  = "${aws_instance.octopus_server.id}"
+  force_detach = true
 }
 
 resource "aws_ebs_volume" "octopus_data_2" {
@@ -65,9 +66,10 @@ resource "aws_ebs_volume" "octopus_data_2" {
 }
 
 resource "aws_volume_attachment" "octopus_data_2_attachment" {
-  device_name = "xvdc"
-  volume_id   = "${aws_ebs_volume.octopus_data_2.id}"
-  instance_id = "${aws_instance.octopus_server.id}"
+  device_name  = "xvdc"
+  volume_id    = "${aws_ebs_volume.octopus_data_2.id}"
+  instance_id  = "${aws_instance.octopus_server.id}"
+  force_detach = true
 }
 
 # Instance IAM permisions
@@ -88,7 +90,17 @@ resource "aws_iam_policy" "get_ec2_instance_info" {
       "Effect": "Allow",
       "Action": "ec2:DescribeInstances",
       "Resource": "*"
-    } 
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ssm:DescribeParameters",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": "arn:aws:ssm:us-east-1:420057813367:parameter/octopus/*"
+    }
   ]
 }
 EOF
